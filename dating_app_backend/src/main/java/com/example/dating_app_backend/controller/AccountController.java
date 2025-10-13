@@ -1,10 +1,19 @@
 package com.example.dating_app_backend.controller;
 
 import com.example.dating_app_backend.dto.AccountDto;
+import com.example.dating_app_backend.dto.AuthResponse;
+import com.example.dating_app_backend.dto.LoginRequest;
+import com.example.dating_app_backend.dto.RegisterRequest;
 import com.example.dating_app_backend.entity.Account;
 import com.example.dating_app_backend.service.AccountService;
+import com.example.dating_app_backend.service.JwtService;
+import com.example.dating_app_backend.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/accounts")
@@ -13,25 +22,47 @@ import org.springframework.web.bind.annotation.*;
 public class AccountController {
 
     private final AccountService service;
+    private final JwtService jwtService;
+    private final UserProfileService userProfileService;
+
 
     @PostMapping("/register")
-    public AccountDto register(@RequestBody Account account) {
-        if (service.existsByPhone(account.getPhone())) {
-            throw new RuntimeException("Số điện thoại đã tồn tại");
+    public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
+        String phone = request.getPhone().trim();
+
+        if (service.existsByPhone(phone)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại đã tồn tại");
         }
+
+        Account account = new Account();
+        account.setPhone(phone);
+        String email = request.getEmail();
+        account.setEmail(email != null && !email.isBlank() ? email.trim() : null);
+        account.setPassword(request.getPassword());
+        account.setRole(Account.Role.USER);
+        account.setStatus(true);
+
         Account saved = service.register(account);
-        return toDto(saved);
+        userProfileService.createDefaultProfile(saved);
+        String token = jwtService.generateToken(saved);
+        return toAuthResponse(saved, token);
     }
 
     @PostMapping("/login")
-    public AccountDto login(@RequestBody Account request) {
-        Account account = service.findByPhone(request.getPhone())
-                .orElseThrow(() -> new RuntimeException("Số điện thoại không tồn tại"));
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        String phone = request.getPhone().trim();
+
+        Account account = service.findByPhone(phone)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sai tài khoản hoặc mật khẩu"));
+
         if (!service.verifyPassword(account, request.getPassword())) {
-            throw new RuntimeException("Sai mật khẩu");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sai tài khoản hoặc mật khẩu");
         }
-        return toDto(account);
+
+        String token = jwtService.generateToken(account);
+        return toAuthResponse(account, token);
     }
+
 
     private AccountDto toDto(Account a) {
         AccountDto dto = new AccountDto();
@@ -41,5 +72,12 @@ public class AccountController {
         dto.setRole(a.getRole().name());
         dto.setStatus(a.getStatus());
         return dto;
+    }
+
+    private AuthResponse toAuthResponse(Account account, String token) {
+        AuthResponse response = new AuthResponse();
+        response.setToken(token);
+        response.setAccount(toDto(account));
+        return response;
     }
 }

@@ -1,1 +1,0 @@
-export const API_BASE_URL = "http://10.10.8.32:8080/api";

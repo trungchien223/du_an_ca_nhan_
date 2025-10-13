@@ -4,7 +4,7 @@ import com.example.dating_app_backend.entity.Account;
 import com.example.dating_app_backend.repository.AccountRepository;
 import com.example.dating_app_backend.service.AccountService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -14,7 +14,7 @@ import java.util.Optional;
 public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository repository;
-    private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public Optional<Account> findByPhone(String phone) {
@@ -28,12 +28,12 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public Account register(Account account) {
-        account.setPassword(encoder.encode(account.getPassword()));
+        account.setPassword(passwordEncoder.encode(account.getPassword()));
         return repository.save(account);
     }
 
     @Override
     public boolean verifyPassword(Account account, String rawPassword) {
-        return encoder.matches(rawPassword, account.getPassword());
+        return passwordEncoder.matches(rawPassword, account.getPassword());
     }
 }

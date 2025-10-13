@@ -45,6 +45,7 @@ public class UserProfileController {
         dto.setAvatarUrl(u.getAvatarUrl());
         dto.setInterests(u.getInterests());
         dto.setLastOnline(u.getLastOnline());
+        dto.setProfileCompleted(u.isProfileCompleted());
         return dto;
     }
 }

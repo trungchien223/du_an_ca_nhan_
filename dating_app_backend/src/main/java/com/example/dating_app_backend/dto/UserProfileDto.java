@@ -16,4 +16,5 @@ public class UserProfileDto {
     private String avatarUrl;
     private String interests;
     private LocalDateTime lastOnline;
+    private boolean profileCompleted;
 }

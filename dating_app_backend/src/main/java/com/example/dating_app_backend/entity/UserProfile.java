@@ -42,6 +42,9 @@ public class UserProfile {
 
     private LocalDateTime lastOnline = LocalDateTime.now();
 
+    @Column(nullable = false)
+    private boolean profileCompleted = false;
+
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private UserLocation location;
 
