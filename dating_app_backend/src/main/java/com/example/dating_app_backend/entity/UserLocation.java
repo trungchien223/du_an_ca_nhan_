@@ -8,9 +8,10 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_location")
-@Setter
 @Getter
+@Setter
 public class UserLocation {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer locationId;
@@ -19,10 +20,21 @@ public class UserLocation {
     @JoinColumn(name = "user_id", nullable = false)
     private UserProfile user;
 
+    @Column(nullable = false)
     private Double latitude;
+
+    @Column(nullable = false)
     private Double longitude;
-    private String city;
 
-    private LocalDateTime updatedAt = LocalDateTime.now();
+    @Column(length = 250)
+    private String address;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

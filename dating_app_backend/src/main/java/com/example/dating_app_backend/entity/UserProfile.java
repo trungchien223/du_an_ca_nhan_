@@ -35,6 +35,7 @@ public class UserProfile {
     private String bio;
 
     private String job;
+    @Column(columnDefinition = "LONGTEXT")
     private String avatarUrl;
 
     @Column(columnDefinition = "JSON")

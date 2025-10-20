@@ -29,8 +29,10 @@ public class MatchController {
         dto.setMatchId(m.getMatchId());
         dto.setUser1Id(m.getUser1().getUserId());
         dto.setUser1Name(m.getUser1().getFullName());
+        dto.setUser1AvatarUrl(m.getUser1().getAvatarUrl());
         dto.setUser2Id(m.getUser2().getUserId());
         dto.setUser2Name(m.getUser2().getFullName());
+        dto.setUser2AvatarUrl(m.getUser2().getAvatarUrl());
         dto.setCompatibilityScore(m.getCompatibilityScore());
         dto.setMatchedAt(m.getMatchedAt());
         return dto;

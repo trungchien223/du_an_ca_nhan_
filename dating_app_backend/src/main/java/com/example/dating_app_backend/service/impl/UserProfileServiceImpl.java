@@ -4,6 +4,7 @@ import com.example.dating_app_backend.entity.Account;
 import com.example.dating_app_backend.entity.UserProfile;
 import com.example.dating_app_backend.repository.AccountRepository;
 import com.example.dating_app_backend.repository.UserProfileRepository;
+import com.example.dating_app_backend.repository.UserLocationRepository;
 import com.example.dating_app_backend.service.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     private final UserProfileRepository repository;
     private final AccountRepository accountRepository;
+    private final UserLocationRepository locationRepository;
 
     /**
      * ✅ Lấy hồ sơ người dùng dựa trên accountId
@@ -71,8 +75,28 @@ public class UserProfileServiceImpl implements UserProfileService {
      * (Tùy chọn) — Tính năng tìm người gần (chưa triển khai)
      */
     @Override
-    public List<UserProfile> findProfilesNearby(double lat, double lon, int maxDistanceKm) {
-        throw new UnsupportedOperationException("Tính năng tìm người gần chưa được triển khai");
+    public List<UserProfile> findProfilesNearby(Integer userId, int maxDistanceKm) {
+        if (maxDistanceKm <= 0) {
+            maxDistanceKm = 10;
+        }
+
+        UserProfile me = repository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
+
+        var location = locationRepository.findByUser_UserId(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bạn chưa cập nhật vị trí."));
+
+        if (location.getLatitude() == null || location.getLongitude() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Vị trí của bạn không hợp lệ.");
+        }
+
+        return locationRepository.findNearby(location.getLatitude(), location.getLongitude(), maxDistanceKm)
+                .stream()
+                .map(l -> l.getUser())
+                .filter(Objects::nonNull)
+                .filter(user -> !user.getUserId().equals(me.getUserId()))
+                .filter(UserProfile::isProfileCompleted)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -83,13 +107,11 @@ public class UserProfileServiceImpl implements UserProfileService {
         UserProfile me = repository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
 
-        String targetGender;
+        UserProfile.Gender targetGender = null;
         if (me.getGender() == UserProfile.Gender.Male) {
-            targetGender = "Female";
+            targetGender = UserProfile.Gender.Female;
         } else if (me.getGender() == UserProfile.Gender.Female) {
-            targetGender = "Male";
-        } else {
-            targetGender = "Other";
+            targetGender = UserProfile.Gender.Male;
         }
 
         return repository.findCompatibleProfiles(userId, targetGender);

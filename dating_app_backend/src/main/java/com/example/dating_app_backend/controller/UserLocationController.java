@@ -19,25 +19,36 @@ public class UserLocationController {
     @PutMapping("/{userId}")
     public UserLocationDto updateLocation(
             @PathVariable Integer userId,
-            @RequestParam double latitude,
-            @RequestParam double longitude,
-            @RequestParam(required = false) String city) {
-        UserLocation loc = service.updateLocation(userId, latitude, longitude, city);
+            @RequestBody UserLocationDto locationDto
+    ) {
+        UserLocation loc = service.updateLocation(
+                userId,
+                locationDto.getLatitude(),
+                locationDto.getLongitude(),
+                locationDto.getAddress()
+        );
         return toDto(loc);
     }
 
+    /**
+     * 📍 Lấy vị trí hiện tại của user theo userId
+     */
     @GetMapping("/{userId}")
     public UserLocationDto getLocation(@PathVariable Integer userId) {
         Optional<UserLocation> loc = service.getByUserId(userId);
         return loc.map(this::toDto).orElse(null);
     }
 
+    /**
+     * ✨ Convert Entity → DTO
+     */
     private UserLocationDto toDto(UserLocation l) {
         UserLocationDto dto = new UserLocationDto();
         dto.setUserId(l.getUser().getUserId());
         dto.setLatitude(l.getLatitude());
         dto.setLongitude(l.getLongitude());
-        dto.setCity(l.getCity());
+        dto.setAddress(l.getAddress());
+        dto.setUpdatedAt(l.getUpdatedAt());
         return dto;
     }
 }

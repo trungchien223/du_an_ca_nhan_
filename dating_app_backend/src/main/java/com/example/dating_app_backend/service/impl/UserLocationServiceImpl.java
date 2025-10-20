@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
@@ -21,7 +22,7 @@ public class UserLocationServiceImpl implements UserLocationService {
 
     @Override
     @Transactional
-    public UserLocation updateLocation(Integer userId, double latitude, double longitude, String city) {
+    public UserLocation updateLocation(Integer userId, double latitude, double longitude, String address) {
         UserProfile user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
@@ -31,7 +32,7 @@ public class UserLocationServiceImpl implements UserLocationService {
         location.setUser(user);
         location.setLatitude(latitude);
         location.setLongitude(longitude);
-        location.setCity(city);
+        location.setAddress(address);
         location.setUpdatedAt(LocalDateTime.now());
 
         return repository.save(location);
@@ -40,5 +41,10 @@ public class UserLocationServiceImpl implements UserLocationService {
     @Override
     public Optional<UserLocation> getByUserId(Integer userId) {
         return repository.findByUser_UserId(userId);
+    }
+
+    @Override
+    public List<UserLocation> findNearby(double lat, double lon, double radiusKm) {
+        return repository.findNearby(lat, lon, radiusKm);
     }
 }

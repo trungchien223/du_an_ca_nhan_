@@ -17,5 +17,5 @@ public interface UserProfileRepository extends JpaRepository<UserProfile, Intege
         WHERE u.userId <> :userId
           AND (:gender IS NULL OR u.gender = :gender)
     """)
-    List<UserProfile> findCompatibleProfiles(Integer userId, String gender);
+    List<UserProfile> findCompatibleProfiles(Integer userId, UserProfile.Gender gender);
 }

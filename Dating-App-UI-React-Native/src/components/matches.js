@@ -1,52 +1,84 @@
-import { View, Text, ScrollView, TouchableOpacity, Image } from "react-native";
 import React from "react";
-import { datesData, matchesData } from "../constant";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { heightPercentageToDP as hp } from "react-native-responsive-screen";
 
-export default function Matches() {
+const fallbackAvatar = require("../../assets/images/profile.jpg");
+
+export default function Matches({ profiles = [], loading = false, onPress }) {
+  if (loading) {
+    return (
+      <View
+        className="mt-4 items-center justify-center"
+        style={{ height: hp(8) }}
+      >
+        <ActivityIndicator size="small" color="#F26322" />
+      </View>
+    );
+  }
+
+  if (!profiles.length) {
+    return null;
+  }
+
   return (
     <View className="mt-4">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        className="space-x-4"
         contentContainerStyle={{
-          paddingLeft: hp(2),
-          paddingRight: hp(2),
+          paddingHorizontal: hp(2),
         }}
       >
-        {datesData?.map((matches, index) => {
+        {profiles.map((profile) => {
+          const name =
+            profile?.displayName ?? profile?.fullName ?? profile?.name ?? "";
+          const age = profile?.age ?? null;
+          const avatar = profile?.avatarUrl
+            ? { uri: profile.avatarUrl }
+            : fallbackAvatar;
+
           return (
             <TouchableOpacity
-              key={index}
-              className="flex items-center space-y-1"
+              key={profile?.id ?? name}
+              className="flex items-center mr-4"
+              onPress={() => onPress?.(profile)}
             >
-              <View className="rounded-full">
+              <View className="rounded-full overflow-hidden">
                 <Image
-                  source={matches.imgUrl}
+                  source={avatar}
                   style={{
                     width: hp(6),
                     height: hp(6),
                   }}
-                  className="rounded-full"
+                  resizeMode="cover"
                 />
               </View>
-              <Text
-                className="text-neutral-800 font-bold "
-                style={{
-                  fontSize: hp(1.6),
-                }}
-              >
-                {matches.name}
-              </Text>
-              <Text
-                className="text-neutral-800 font-bold"
-                style={{
-                  fontSize: hp(1.6),
-                }}
-              >
-                {matches.age}
-              </Text>
+              {!!name && (
+                <Text
+                  className="text-neutral-800 font-bold mt-2"
+                  style={{
+                    fontSize: hp(1.6),
+                  }}
+                  numberOfLines={1}
+                >
+                  {name}
+                </Text>
+              )}
+              {age ? (
+                <Text
+                  className="text-neutral-500 font-semibold"
+                  style={{ fontSize: hp(1.5) }}
+                >
+                  {age}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           );
         })}

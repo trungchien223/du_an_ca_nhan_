@@ -1,8 +1,11 @@
 import React from "react";
 import WelcomeScreen from "../screens/WelcomeScreen";
+import LoginScreen from "../screens/LoginScreen";
+import RegisterScreen from "../screens/RegisterScreen";
 import HomeScreen from "../screens/HomeScreen";
 import ChatScreen from "../screens/ChatScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 import ChatDetailsScreen from "../screens/ChatDetailsScreen";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -51,7 +54,7 @@ export default function AppNavigation() {
           tabBarInactiveTintColor: "gray",
           // tabBarShowLabel: false,
           tabBarStyle: {
-            backgroundColor: colorScheme == "dark" ? "black" : "white",
+            backgroundColor: colorScheme === "dark" ? "black" : "white",
           },
         })}
       >
@@ -66,7 +69,7 @@ export default function AppNavigation() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="HomeTabs"
+        initialRouteName="Welcome"
         screenOptions={{
           headerShown: false,
         }}
@@ -75,6 +78,28 @@ export default function AppNavigation() {
           name="Welcome"
           component={WelcomeScreen}
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="Register"
+          component={RegisterScreen}
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="CompleteProfile"
+          component={CompleteProfileScreen}
+          options={{
+            headerShown: false,
+            gestureEnabled: false,
+          }}
         />
         <Stack.Screen
           name="ChatDetails"

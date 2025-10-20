@@ -34,6 +34,15 @@ public class UserProfileController {
                 .collect(Collectors.toList());
     }
 
+    @GetMapping("/{userId}/nearby")
+    public List<UserProfileDto> getNearby(
+            @PathVariable Integer userId,
+            @RequestParam(name = "distanceKm", defaultValue = "10") int distanceKm) {
+        return service.findProfilesNearby(userId, distanceKm)
+                .stream().map(this::toDto)
+                .collect(Collectors.toList());
+    }
+
     private UserProfileDto toDto(UserProfile u) {
         UserProfileDto dto = new UserProfileDto();
         dto.setUserId(u.getUserId());
