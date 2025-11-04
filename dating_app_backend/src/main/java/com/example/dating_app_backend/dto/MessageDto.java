@@ -13,5 +13,7 @@ public class MessageDto {
     private String content;
     private String messageType;
     private Boolean isRead;
+    private Boolean isDeleted;
+    private LocalDateTime deletedAt;
     private LocalDateTime createdAt;
 }

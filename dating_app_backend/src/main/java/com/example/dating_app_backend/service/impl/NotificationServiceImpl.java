@@ -21,19 +21,48 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional
     public void createNotification(Integer userId, String type, String content) {
+        Notification.Type notificationType = Notification.Type.valueOf(type.toUpperCase());
+        createNotification(userId, notificationType, content, null, null);
+    }
+
+    @Override
+    @Transactional
+    public void createNotification(Integer userId, Notification.Type type, String content, Integer referenceId, String referenceType) {
         UserProfile user = userRepo.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
         Notification n = new Notification();
         n.setUser(user);
-        n.setType(Notification.Type.valueOf(type.toUpperCase())); // chuyển chuỗi sang enum
+        n.setType(type);
         n.setContent(content);
+        n.setReferenceId(referenceId);
+        n.setReferenceType(referenceType != null ? referenceType : type.name());
         repository.save(n);
+    }
+
+    @Override
+    @Transactional
+    public void markNotificationsAsRead(Integer userId, Notification.Type type, Integer referenceId) {
+        if (userId == null || type == null || referenceId == null) {
+            return;
+        }
+        List<Notification> notifications = repository
+                .findByUser_UserIdAndTypeAndReferenceIdAndIsReadFalse(userId, type, referenceId);
+        if (notifications.isEmpty()) {
+            return;
+        }
+        notifications.forEach(n -> n.setIsRead(true));
+        repository.saveAll(notifications);
     }
 
     @Override
     public List<Notification> getUnreadNotifications(Integer userId) {
         return repository.findByUser_UserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+    }
+
+    @Override
+    public List<Notification> getNotifications(Integer userId) {
+        return repository.findByUser_UserIdOrderByCreatedAtDesc(userId);
     }
 
     @Override

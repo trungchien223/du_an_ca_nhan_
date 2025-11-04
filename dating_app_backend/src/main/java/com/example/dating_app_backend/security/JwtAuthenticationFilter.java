@@ -25,10 +25,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
 
         final String authHeader = request.getHeader("Authorization");
 
+        // 🔸 Nếu không có header Authorization → bỏ qua (cho phép endpoint public)
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
@@ -36,11 +38,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         final String token = authHeader.substring(7);
 
-        if (!jwtService.validateToken(token)) {
+        // 🔸 Kiểm tra hợp lệ token
+        if (!jwtService.isTokenValid(token)) {
+            System.out.println("❌ Invalid or expired JWT in REST request");
+            // clear context nếu có user cũ
+            SecurityContextHolder.clearContext();
             filterChain.doFilter(request, response);
             return;
         }
 
+        // 🔸 Nếu context chưa có authentication thì set mới
         if (SecurityContextHolder.getContext().getAuthentication() == null) {
             Integer accountId = jwtService.extractAccountId(token);
             String role = jwtService.extractRole(token);
@@ -54,10 +61,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 );
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                System.out.println("✅ Authenticated request from accountId=" + accountId + " with role=" + role);
             }
         }
 
         filterChain.doFilter(request, response);
     }
 }
-

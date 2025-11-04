@@ -17,6 +17,7 @@ import { useNavigation } from "@react-navigation/native";
 import { getStoredAuth, logout as logoutService } from "../services/authService";
 import { getProfileByAccountId, updateProfile } from "../services/profileService";
 import * as ImagePicker from "expo-image-picker";
+import { websocketService } from "../services/websocketService";
 
 const fallbackAvatar = require("../../assets/images/profile.jpg");
 
@@ -78,6 +79,7 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     await logoutService();
+    websocketService.disconnect();
     navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
   };
 

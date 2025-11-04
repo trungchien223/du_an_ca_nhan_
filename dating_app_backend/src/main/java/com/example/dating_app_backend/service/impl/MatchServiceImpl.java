@@ -2,10 +2,12 @@ package com.example.dating_app_backend.service.impl;
 
 import com.example.dating_app_backend.entity.Match;
 import com.example.dating_app_backend.entity.UserProfile;
+import com.example.dating_app_backend.event.MatchCreatedEvent;
 import com.example.dating_app_backend.repository.MatchRepository;
 import com.example.dating_app_backend.repository.UserProfileRepository;
 import com.example.dating_app_backend.service.MatchService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,6 +18,7 @@ public class MatchServiceImpl implements MatchService {
 
     private final MatchRepository repository;
     private final UserProfileRepository userRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public Match createMatch(Integer user1Id, Integer user2Id) {
@@ -34,7 +37,13 @@ public class MatchServiceImpl implements MatchService {
         match.setUser1(user1);
         match.setUser2(user2);
         match.setCompatibilityScore(100.0); // hoặc tính toán thực tế
-        return repository.save(match);
+        Match saved = repository.save(match);
+        eventPublisher.publishEvent(new MatchCreatedEvent(
+                saved.getMatchId(),
+                user1Id,
+                user2Id
+        ));
+        return saved;
     }
 
     @Override

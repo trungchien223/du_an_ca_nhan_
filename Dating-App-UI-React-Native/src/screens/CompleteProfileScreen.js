@@ -27,7 +27,7 @@ import {
   PhotoIcon,
 } from "react-native-heroicons/outline";
 import * as ImagePicker from "expo-image-picker";
-import { getStoredAuth } from "../services/authService";
+import { getStoredAuth, logout } from "../services/authService";
 import {
   getProfileByAccountId,
   updateProfile,
@@ -271,6 +271,11 @@ export default function CompleteProfileScreen() {
 
       await updateProfile(profile.userId, payload);
       setSuccessMessage("Cập nhật hồ sơ thành công!");
+      await logout();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }],
+      });
     } catch (error) {
       setErrorMessage(
         error?.message || "Không thể lưu hồ sơ, vui lòng thử lại."

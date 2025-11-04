@@ -33,6 +33,7 @@ import { login, googleLogin } from "../services/authService";
 import { getProfileByAccountId } from "../services/profileService";
 import { loginSchema } from "../utils/validationSchemas";
 import { ValidationError } from "yup";
+import { websocketService } from "../services/websocketService";
 
 // ✅ ép cố định redirect URI cũ
 const redirectUri = "https://auth.expo.io/@trungchien/datingapp";
@@ -180,6 +181,7 @@ export default function LoginScreen() {
         return;
       }
 
+      await websocketService.connect({ force: true });
       navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] });
     } catch (error) {
       console.error("🚨 Lỗi login Google:", error.message);
@@ -215,6 +217,7 @@ export default function LoginScreen() {
         });
         return;
       }
+      await websocketService.connect({ force: true });
       navigation.reset({ index: 0, routes: [{ name: "HomeTabs" }] });
     } catch (error) {
       setErrorMessage(error.message || "Đăng nhập thất bại.");

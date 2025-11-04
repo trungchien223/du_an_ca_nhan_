@@ -43,6 +43,7 @@ export default function Matches({ profiles = [], loading = false, onPress }) {
           const avatar = profile?.avatarUrl
             ? { uri: profile.avatarUrl }
             : fallbackAvatar;
+          const isOnline = Boolean(profile?.online);
 
           return (
             <TouchableOpacity
@@ -50,7 +51,10 @@ export default function Matches({ profiles = [], loading = false, onPress }) {
               className="flex items-center mr-4"
               onPress={() => onPress?.(profile)}
             >
-              <View className="rounded-full overflow-hidden">
+              <View
+                className="rounded-full overflow-hidden"
+                style={{ position: "relative" }}
+              >
                 <Image
                   source={avatar}
                   style={{
@@ -59,6 +63,21 @@ export default function Matches({ profiles = [], loading = false, onPress }) {
                   }}
                   resizeMode="cover"
                 />
+                {isOnline ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      bottom: 4,
+                      right: 4,
+                      width: hp(0.9),
+                      height: hp(0.9),
+                      borderRadius: hp(0.45),
+                      backgroundColor: "#22c55e",
+                      borderWidth: 1,
+                      borderColor: "#ffffff",
+                    }}
+                  />
+                ) : null}
               </View>
               {!!name && (
                 <Text

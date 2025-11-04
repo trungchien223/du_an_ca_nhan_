@@ -35,6 +35,11 @@ public class Message {
 
     private Boolean isRead = false;
 
+    @Column(nullable = false)
+    private Boolean isDeleted = false;
+
+    private LocalDateTime deletedAt;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum Type {

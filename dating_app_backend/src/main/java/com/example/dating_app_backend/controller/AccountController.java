@@ -4,9 +4,12 @@ import com.example.dating_app_backend.dto.AccountDto;
 import com.example.dating_app_backend.dto.AuthResponse;
 import com.example.dating_app_backend.dto.LoginRequest;
 import com.example.dating_app_backend.dto.RegisterRequest;
+import com.example.dating_app_backend.dto.RefreshTokenRequest;
 import com.example.dating_app_backend.entity.Account;
+import com.example.dating_app_backend.entity.RefreshToken;
 import com.example.dating_app_backend.service.AccountService;
 import com.example.dating_app_backend.service.JwtService;
+import com.example.dating_app_backend.service.RefreshTokenService;
 import com.example.dating_app_backend.service.UserProfileService;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
@@ -33,6 +36,7 @@ public class AccountController {
     private final AccountService service;
     private final JwtService jwtService;
     private final UserProfileService userProfileService;
+    private final RefreshTokenService refreshTokenService;
 
 
     @PostMapping("/register")
@@ -54,7 +58,8 @@ public class AccountController {
         Account saved = service.register(account);
         userProfileService.createDefaultProfile(saved);
         String token = jwtService.generateToken(saved);
-        return toAuthResponse(saved, token);
+        RefreshToken refreshToken = refreshTokenService.createToken(saved);
+        return toAuthResponse(saved, token, refreshToken);
     }
 
     @PostMapping("/login")
@@ -68,8 +73,10 @@ public class AccountController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sai tài khoản hoặc mật khẩu");
         }
 
+        refreshTokenService.revokeAllForAccount(account);
         String token = jwtService.generateToken(account);
-        return toAuthResponse(account, token);
+        RefreshToken refreshToken = refreshTokenService.createToken(account);
+        return toAuthResponse(account, token, refreshToken);
     }
 
     @PostMapping("/google-login")
@@ -90,11 +97,21 @@ public class AccountController {
             Account account = service.findByEmail(email)
                     .orElseGet(() -> service.createGoogleAccount(email, name, avatar));
 
+            refreshTokenService.revokeAllForAccount(account);
             String token = jwtService.generateToken(account);
-            return toAuthResponse(account, token);
+            RefreshToken refreshToken = refreshTokenService.createToken(account);
+            return toAuthResponse(account, token, refreshToken);
         } else {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token không hợp lệ");
         }
+    }
+
+    @PostMapping("/refresh")
+    public AuthResponse refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        String refreshTokenValue = request.getRefreshToken().trim();
+        RefreshToken refreshed = refreshTokenService.rotateToken(refreshTokenValue);
+        String token = jwtService.generateToken(refreshed.getAccount());
+        return toAuthResponse(refreshed.getAccount(), token, refreshed);
     }
 
     private AccountDto toDto(Account a) {
@@ -107,9 +124,13 @@ public class AccountController {
         return dto;
     }
 
-    private AuthResponse toAuthResponse(Account account, String token) {
+    private AuthResponse toAuthResponse(Account account, String token, RefreshToken refreshToken) {
         AuthResponse response = new AuthResponse();
         response.setToken(token);
+        response.setExpiresIn(jwtService.getExpiration());
+        response.setRefreshToken(refreshToken.getToken());
+        long refreshTtl = java.time.Duration.between(java.time.LocalDateTime.now(), refreshToken.getExpiresAt()).toMillis();
+        response.setRefreshExpiresIn(Math.max(refreshTtl, 0));
         response.setAccount(toDto(account));
         return response;
     }

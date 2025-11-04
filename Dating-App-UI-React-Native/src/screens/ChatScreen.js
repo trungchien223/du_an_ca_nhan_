@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -17,7 +17,7 @@ import Matches from "../components/matches";
 import { getStoredAuth } from "../services/authService";
 import { getProfileByAccountId } from "../services/profileService";
 import { getMatchesByUser } from "../services/matchService";
-import { getMessagesByMatch } from "../services/messageService";
+import { useWebSocket } from "../context/WebSocketContext";
 
 const android = Platform.OS === "android";
 const fallbackAvatar = require("../../assets/images/profile.jpg");
@@ -34,16 +34,46 @@ const formatTime = (dateString) => {
   });
 };
 
+const STATUS_LABEL = {
+  SENT: "Đã gửi",
+  DELIVERED: "Đã nhận",
+  READ: "Đã xem",
+  DELETED: "Đã thu hồi",
+};
+
+const mapLastMessage = (message) => ({
+  messageId: message?.messageId ?? null,
+  matchId: message?.matchId ?? null,
+  senderId: message?.senderId ?? null,
+  receiverId: message?.receiverId ?? null,
+  content: message?.content ?? "",
+  createdAt: message?.createdAt ?? null,
+  isDeleted: Boolean(message?.isDeleted),
+  lastStatus:
+    message?.lastStatus ?? (message?.isRead ? "READ" : undefined),
+});
+
+const getStatusLabel = (message) => {
+  if (!message) return null;
+  if (message.isDeleted) return STATUS_LABEL.DELETED;
+  if (message.lastStatus && STATUS_LABEL[message.lastStatus]) {
+    return STATUS_LABEL[message.lastStatus];
+  }
+  return null;
+};
+
 export default function ChatScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const refreshFlag = route.params?.refresh ?? false;
+  const { subscribe, typingState, presence } = useWebSocket();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [matches, setMatches] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
   const lastFetchedRef = useRef(0);
   const DATA_STALE_AFTER_MS = 60000;
 
@@ -69,6 +99,7 @@ export default function ChatScreen() {
         if (!isActive) {
           return;
         }
+        setCurrentUser(profile);
 
         if (!profile?.userId) {
           throw new Error("Không xác định được hồ sơ người dùng hiện tại.");
@@ -79,43 +110,37 @@ export default function ChatScreen() {
           return;
         }
 
-        const enriched = await Promise.all(
-          (rawMatches ?? []).map(async (match) => {
-            const isUser1 = match.user1Id === profile.userId;
-            const partner = isUser1
-              ? {
-                  id: match.user2Id,
-                  name: match.user2Name,
-                  avatarUrl: match.user2AvatarUrl,
-                  matchedAt: match.matchedAt,
-                }
-              : {
-                  id: match.user1Id,
-                  name: match.user1Name,
-                  avatarUrl: match.user1AvatarUrl,
-                  matchedAt: match.matchedAt,
-                };
-
-            try {
-              const messages = await getMessagesByMatch(match.matchId);
-              const lastMessage = messages?.length
-                ? messages[messages.length - 1]
-                : null;
-
-              return {
-                ...match,
-                partner,
-                lastMessage,
+        const enriched = (rawMatches ?? []).map((match) => {
+          const isUser1 = match.user1Id === profile.userId;
+          const partner = isUser1
+            ? {
+                id: match.user2Id,
+                name: match.user2Name,
+                avatarUrl: match.user2AvatarUrl,
+                matchedAt: match.matchedAt,
+              }
+            : {
+                id: match.user1Id,
+                name: match.user1Name,
+                avatarUrl: match.user1AvatarUrl,
+                matchedAt: match.matchedAt,
               };
-            } catch {
-              return {
-                ...match,
-                partner,
-                lastMessage: null,
-              };
-            }
-          })
-        );
+
+          const lastMessage = match.lastMessage
+            ? mapLastMessage(match.lastMessage)
+            : null;
+
+          if (lastMessage) {
+            lastMessage.matchId = match.matchId;
+          }
+
+          return {
+            ...match,
+            partner,
+            lastMessage,
+            unreadCount: Number(match.unreadCount ?? 0),
+          };
+        });
 
         if (!isActive) {
           return;
@@ -171,6 +196,100 @@ export default function ChatScreen() {
     }, [loadMatches, hasLoaded, navigation, refreshFlag])
   );
 
+  useEffect(() => {
+    if (!subscribe) return undefined;
+
+    const offMessage = subscribe("chat.message", (payload) => {
+      const incoming = payload?.message;
+      if (!incoming) return;
+      setMatches((prev) => {
+        const index = prev.findIndex(
+          (item) => item.matchId === incoming.matchId
+        );
+        if (index === -1) {
+          return prev;
+        }
+        const next = [...prev];
+        const previous = next[index];
+        const lastMessage = mapLastMessage({
+          ...incoming,
+          lastStatus: payload?.status,
+        });
+        lastMessage.matchId = incoming.matchId;
+
+        const isMine =
+          currentUser?.userId &&
+          Number(incoming.senderId) === Number(currentUser.userId);
+        const unreadCount = isMine
+          ? previous.unreadCount ?? 0
+          : (previous.unreadCount ?? 0) + 1;
+
+        const updated = {
+          ...previous,
+          lastMessage,
+          unreadCount,
+        };
+
+        next.splice(index, 1);
+        next.unshift(updated);
+        return next;
+      });
+    });
+
+    const offStatus = subscribe("chat.status", (payload) => {
+      if (!payload) return;
+      setMatches((prev) =>
+        prev.map((match) => {
+          if (match.matchId !== payload.matchId) {
+            return match;
+          }
+
+          const actorId =
+            payload.actorId ?? payload.userId ?? payload.partnerId ?? null;
+
+          const lastMessageMatches =
+            match.lastMessage &&
+            match.lastMessage.messageId === payload.messageId;
+
+          const updated = lastMessageMatches
+            ? {
+                ...match,
+                lastMessage: {
+                  ...match.lastMessage,
+                  lastStatus: payload.status,
+                  isDeleted:
+                    payload.status === "DELETED"
+                      ? true
+                      : match.lastMessage.isDeleted,
+                },
+              }
+            : { ...match };
+
+          if (
+            payload.status === "READ" &&
+            currentUser?.userId &&
+            actorId !== null &&
+            Number(actorId) === Number(currentUser.userId)
+          ) {
+            updated.unreadCount = 0;
+          }
+
+          return updated;
+        })
+      );
+    });
+
+    const offMatch = subscribe("match.new", () => {
+      loadMatches({ silent: true });
+    });
+
+    return () => {
+      offMessage?.();
+      offStatus?.();
+      offMatch?.();
+    };
+  }, [subscribe, loadMatches, currentUser?.userId]);
+
   const filteredMatches = useMemo(() => {
     if (!searchTerm.trim()) {
       return matches;
@@ -200,11 +319,21 @@ export default function ChatScreen() {
           displayName: match.partner?.name,
           avatarUrl: match.partner?.avatarUrl,
           matchedAt: match.partner?.matchedAt ?? match.matchedAt,
+          online: match.partner?.id
+            ? Boolean(presence?.[match.partner.id])
+            : false,
         }))}
         loading={(!hasLoaded && loading) || refreshing}
         onPress={(match) => {
           const target = matches.find((item) => item.matchId === match.id);
           if (target) {
+            setMatches((prev) =>
+              prev.map((item) =>
+                item.matchId === target.matchId
+                  ? { ...item, unreadCount: 0 }
+                  : item
+              )
+            );
             navigation.navigate("ChatDetails", {
               matchId: target.matchId,
               partner: {
@@ -253,13 +382,44 @@ export default function ChatScreen() {
             data={filteredMatches}
             keyExtractor={(item) => String(item.matchId)}
             renderItem={({ item }) => {
-              const lastMessageText =
-                item.lastMessage?.content ?? "Chưa có tin nhắn nào.";
-              const lastMessageTime =
-                item.lastMessage?.createdAt ?? item.matchedAt;
+              const partnerId = item.partner?.id;
+              const partnerOnline = partnerId
+                ? Boolean(presence?.[partnerId])
+                : false;
+              const isTyping = partnerId
+                ? Boolean(typingState?.[item.matchId]?.[partnerId])
+                : false;
+              const unreadCount = Number(item.unreadCount ?? 0);
               const avatarSource = item.partner?.avatarUrl
                 ? { uri: item.partner.avatarUrl }
                 : fallbackAvatar;
+              const lastMessageTime =
+                item.lastMessage?.createdAt ?? item.matchedAt;
+
+              let previewText = "Chưa có tin nhắn nào.";
+              if (isTyping) {
+                previewText = "Đang nhập...";
+              } else if (item.lastMessage?.isDeleted) {
+                previewText = "Tin nhắn đã được thu hồi.";
+              } else if (item.lastMessage?.content) {
+                previewText = item.lastMessage.content;
+              }
+
+              const hasUnread = unreadCount > 0 && !isTyping;
+              const previewColor = hasUnread
+                ? "#111827"
+                : isTyping
+                ? "#3B82F6"
+                : item.lastMessage?.isDeleted
+                ? "#9CA3AF"
+                : "#6B7280";
+
+              const statusLabel =
+                item.lastMessage &&
+                currentUser?.userId &&
+                item.lastMessage.senderId === currentUser.userId
+                  ? getStatusLabel(item.lastMessage)
+                  : null;
 
               return (
                 <TouchableOpacity
@@ -275,10 +435,13 @@ export default function ChatScreen() {
                   }
                 >
                   <View
-                    className="mr-3 rounded-full overflow-hidden"
                     style={{
+                      marginRight: 12,
                       width: hp(6.5),
                       height: hp(6.5),
+                      borderRadius: hp(3.25),
+                      overflow: "hidden",
+                      position: "relative",
                     }}
                   >
                     <Image
@@ -288,23 +451,70 @@ export default function ChatScreen() {
                         height: "100%",
                       }}
                     />
+                    {partnerOnline ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: 6,
+                          right: 6,
+                          width: hp(1.1),
+                          height: hp(1.1),
+                          borderRadius: hp(0.55),
+                          backgroundColor: "#22c55e",
+                          borderWidth: 1.5,
+                          borderColor: "#ffffff",
+                        }}
+                      />
+                    ) : null}
                   </View>
 
                   <View className="flex-1 justify-center">
                     <View className="flex-row justify-between items-center mb-1">
-                      <Text className="font-bold text-base">
+                      <Text className="font-bold text-base" numberOfLines={1}>
                         {item.partner?.name ?? "Người dùng"}
                       </Text>
-                      <Text className="text-xs text-neutral-400">
-                        {formatTime(lastMessageTime)}
-                      </Text>
+                      <View className="flex-row items-center">
+                        {hasUnread ? (
+                          <View
+                            style={{
+                              backgroundColor: "#F26322",
+                              borderRadius: hp(1),
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              marginRight: 6,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: "#FFFFFF",
+                                fontSize: 11,
+                                fontWeight: "600",
+                              }}
+                            >
+                              {unreadCount}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <Text className="text-xs text-neutral-400">
+                          {formatTime(lastMessageTime)}
+                        </Text>
+                      </View>
                     </View>
                     <Text
-                      className="font-semibold text-xs text-neutral-500"
+                      className="font-semibold text-xs"
                       numberOfLines={1}
+                      style={{
+                        color: previewColor,
+                        fontWeight: hasUnread ? "700" : "600",
+                      }}
                     >
-                      {lastMessageText}
+                      {previewText}
                     </Text>
+                    {statusLabel && !isTyping ? (
+                      <Text className="text-[11px] text-neutral-400 mt-0.5">
+                        {statusLabel}
+                      </Text>
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               );

@@ -14,4 +14,6 @@ public class MatchDto {
     private String user2AvatarUrl;
     private Double compatibilityScore;
     private LocalDateTime matchedAt;
+    private MessageDto lastMessage;
+    private Long unreadCount;
 }

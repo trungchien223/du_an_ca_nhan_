@@ -15,7 +15,7 @@ public class Notification {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer notificationId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private UserProfile user;
 
@@ -25,11 +25,16 @@ public class Notification {
     @Column(columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "reference_id")
+    private Integer referenceId;
+
+    @Column(name = "reference_type", length = 50)
+    private String referenceType;
+
     private Boolean isRead = false;
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public enum Type {
         MATCH, MESSAGE, LIKE, SYSTEM
     }
-
 }
