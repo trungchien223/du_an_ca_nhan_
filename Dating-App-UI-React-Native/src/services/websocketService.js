@@ -199,6 +199,12 @@ class WebSocketService {
       if (!payload) return;
       emit("presence.update", payload);
     });
+
+    this.client.subscribe("/user/queue/unread", (message) => {
+      const payload = safeParse(message.body);
+      if (!payload) return;
+      emit("chat.unread", { matchId: payload.matchId, total: payload.count });
+    });
   }
 
   publish(destination, body) {
@@ -284,14 +290,17 @@ class WebSocketService {
       this.connect();
       return;
     }
-    if (!messageId || !matchId || !partnerId || !status) return;
+    if (!matchId || !partnerId || !status) return;
+
     this.publish("/app/chat/status", {
-      messageId,
+      messageId: messageId ?? null,
       matchId,
       partnerId,
       status,
     });
   }
+
+
 
   recallMessage({ messageId, matchId, partnerId }) {
     if (!this.connected) {

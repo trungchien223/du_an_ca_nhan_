@@ -9,4 +9,5 @@ public interface MessageService {
     void markAsRead(Integer messageId);
     void markConversationAsRead(Integer matchId, Integer userId);
     Message recallMessage(Integer messageId, Integer requesterId);
+    long countUnreadMessages(Integer matchId, Integer userId);
 }

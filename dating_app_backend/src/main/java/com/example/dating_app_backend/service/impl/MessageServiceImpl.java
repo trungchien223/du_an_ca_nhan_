@@ -137,6 +137,11 @@ public class MessageServiceImpl implements MessageService {
         return repository.save(message);
     }
 
+    @Override
+    public long countUnreadMessages(Integer matchId, Integer userId) {
+        return repository.countUnreadMessages(matchId, userId);
+    }
+
     private void ensureParticipant(Match match, UserProfile user, String role) {
         if (!isParticipant(match, user.getUserId())) {
             throw new RuntimeException(role + " không thuộc cuộc trò chuyện này.");

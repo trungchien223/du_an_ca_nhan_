@@ -18,6 +18,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.StringUtils;
 
 import java.security.Principal;
+import java.util.Map;
 import java.util.Objects;
 
 @Controller
@@ -77,6 +78,15 @@ public class ChatWebSocketController {
                 "/queue/chat-status",
                 delivered
         );
+
+        // BE: sau khi đọc hoặc gửi tin nhắn
+        long unread = messageService.countUnreadMessages(payload.matchId(), payload.receiverId());
+        messagingTemplate.convertAndSendToUser(
+                String.valueOf(payload.receiverId()),
+                "/queue/unread",
+                Map.of("matchId", payload.matchId(), "count", unread)
+        );
+
     }
 
     @MessageMapping("/chat/typing")
@@ -95,11 +105,37 @@ public class ChatWebSocketController {
     @MessageMapping("/chat/status")
     public void handleStatusUpdate(MessageStatusPayload payload, Principal principal) {
         Integer userId = requireUserId(principal);
-        Objects.requireNonNull(payload.messageId(), "messageId is required");
         Objects.requireNonNull(payload.matchId(), "matchId is required");
         Objects.requireNonNull(payload.partnerId(), "partnerId is required");
         Objects.requireNonNull(payload.status(), "status is required");
 
+        // ✅ Nếu là READ toàn bộ conversation
+        if (payload.status() == MessageStatus.READ && payload.messageId() == null) {
+            messageService.markConversationAsRead(payload.matchId(), userId);
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(userId),
+                    "/queue/unread",
+                    Map.of("matchId", payload.matchId(), "count", 0)
+            );
+
+            // Đồng thời báo cho người bên kia rằng người này đã đọc hết
+            MessageStatusPayload outbound = new MessageStatusPayload(
+                    null,
+                    payload.matchId(),
+                    userId,
+                    payload.partnerId(),
+                    MessageStatus.READ
+            );
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(payload.partnerId()),
+                    "/queue/chat-status",
+                    outbound
+            );
+            return;
+        }
+
+        // ✅ Nếu chỉ là cập nhật READ cho 1 message cụ thể
+        Objects.requireNonNull(payload.messageId(), "messageId is required");
         if (payload.status() == MessageStatus.READ) {
             messageService.markAsRead(payload.messageId());
         }
@@ -124,6 +160,7 @@ public class ChatWebSocketController {
                 outbound
         );
     }
+
 
     @MessageMapping("/chat/recall")
     public void handleRecall(MessageRecallPayload payload, Principal principal) {

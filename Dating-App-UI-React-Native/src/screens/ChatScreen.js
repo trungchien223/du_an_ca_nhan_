@@ -290,6 +290,23 @@ export default function ChatScreen() {
     };
   }, [subscribe, loadMatches, currentUser?.userId]);
 
+  useEffect(() => {
+    if (!subscribe) return;
+    const offUnread = subscribe("chat.unread", ({ total, matchId }) => {
+      setMatches((prev) =>
+        prev.map((item) =>
+          item.matchId === matchId
+            ? { ...item, unreadCount: total }
+            : item
+        )
+      );
+    });
+    return () => offUnread?.();
+  }, [subscribe]);
+
+
+
+
   const filteredMatches = useMemo(() => {
     if (!searchTerm.trim()) {
       return matches;
