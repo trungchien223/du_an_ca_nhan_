@@ -4,6 +4,10 @@
     useRef,
     useState,
   } from "react";
+  import * as ImagePicker from "expo-image-picker";
+  import { Alert } from "react-native";
+  import { FaceSmileIcon, PhotoIcon } from "react-native-heroicons/outline";
+
   import {
     ActivityIndicator,
     Image,
@@ -20,7 +24,7 @@
   } from "react-native-heroicons/outline";
   import { EllipsisHorizontalIcon } from "react-native-heroicons/solid";
   import { heightPercentageToDP as hp } from "react-native-responsive-screen";
-  import { SafeAreaView } from "react-native-safe-area-context";
+  import { SafeAreaView, useSafeAreaInsets  } from "react-native-safe-area-context";
   import {
     Bubble,
     GiftedChat,
@@ -34,28 +38,29 @@
   import { websocketService, websocketEvents } from "../services/websocketService";
 
   import { useWebSocket } from "../context/WebSocketContext";
-  
+
   const android = Platform.OS === "android";
   const fallbackAvatar = require("../../assets/images/profile.jpg");
-  
+
   export default function ChatDetailsScreen() {
     const navigation = useNavigation();
     const route = useRoute();
     const { matchId, partner } = route.params ?? {};
     const partnerId = partner?.id;
-  
+
     const {
       connected,
       sendChatMessage,
       sendTyping,
     } = useWebSocket();
-  
+
     const [currentUser, setCurrentUser] = useState(null);
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const chatRef = useRef(null);
-  
+    const insets = useSafeAreaInsets();
+
     // --- Load messages ---
     useEffect(() => {
       let isMounted = true;
@@ -65,11 +70,11 @@
           const stored = await getStoredAuth();
           const accountId = stored.account?.accountId;
           if (!accountId) throw new Error("Phiên đăng nhập không còn tồn tại.");
-  
+
           const profile = await getProfileByAccountId(accountId);
           if (!isMounted) return;
           setCurrentUser(profile);
-  
+
           const history = await getMessagesByMatch(matchId);
           if (!isMounted) return;
           const prepared = (history ?? []).map((m) => ({
@@ -93,7 +98,7 @@
         isMounted = false;
       };
     }, [matchId]);
-  
+
     useEffect(() => {
       if (!matchId || !currentUser) return;
       websocketService.sendStatus({
@@ -170,17 +175,17 @@
         if (!text || sending) return;
         try {
           setSending(true);
-  
+
           // 🟢 CHỜ WEBSOCKET SẴN SÀNG TRƯỚC KHI GỬI
           await websocketService.waitUntilConnected();
-  
+
           // 🟢 GỬI TIN NHẮN SAU KHI ĐÃ ĐẢM BẢO KẾT NỐI
           const { clientMessageId } = sendChatMessage({
             matchId,
             receiverId: partnerId,
             content: text,
           });
-  
+
           // 🟢 HIỂN THỊ OPTIMISTIC TIN NHẮN
           const optimistic = {
             _id: `temp-${clientMessageId}-${Date.now()}`,
@@ -202,7 +207,7 @@
       },
       [matchId, partnerId, currentUser, sending, sendChatMessage]
     );
-  
+
     // --- Input change ---
     const handleInputChange = useCallback(
       (value = "") => {
@@ -210,7 +215,7 @@
       },
       [matchId, partnerId, sendTyping]
     );
-  
+
     // --- Bong bóng chat ---
     const renderBubble = useCallback(
       (props) => (
@@ -244,7 +249,7 @@
       ),
       []
     );
-  
+
     // --- InputToolbar gọn gàng ---
     const renderInputToolbar = useCallback(
       (props) => (
@@ -264,7 +269,7 @@
       ),
       []
     );
-  
+
     // --- Ô nhập chat (Composer) kiểm soát chiều cao thực ---
     const renderComposer = useCallback(
       (props) => (
@@ -291,7 +296,7 @@
       ),
       []
     );
-  
+
     // --- Nút gửi ---
     const renderSend = useCallback(
       (props) => {
@@ -320,22 +325,62 @@
       },
       [sending]
     );
-  
+
+    const renderActions = useCallback(
+      () => (
+        <View style={{ flexDirection: "row", alignItems: "center", marginLeft: 4 }}>
+          {/* 😄 Nút emoji đẹp */}
+          <TouchableOpacity
+            onPress={() => Alert.alert("Emoji", "Mở emoji picker (sẽ thêm sau)")}
+            style={{
+              padding: 6,
+              borderRadius: 20,
+              marginRight: 2,
+            }}
+          >
+            <FaceSmileIcon size={24} color="#6B7280" />
+          </TouchableOpacity>
+
+          {/* 📷 Nút gửi ảnh */}
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                  allowsEditing: true,
+                  aspect: [1, 1],
+                  quality: 0.8,
+                });
+                if (!result.canceled && result.assets?.length > 0) {
+                  const image = result.assets[0];
+                  console.log("📸 Selected:", image.uri);
+                  // TODO: gọi hàm gửi ảnh qua WebSocket hoặc upload lên server
+                }
+              } catch (error) {
+                console.error("❌ Lỗi chọn ảnh:", error);
+              }
+            }}
+            style={{
+              padding: 6,
+              borderRadius: 20,
+            }}
+          >
+            <PhotoIcon size={24} color="#6B7280" />
+          </TouchableOpacity>
+        </View>
+      ),
+      []
+    );
+
+
+
     const avatarSource = partner?.avatarUrl
       ? { uri: partner.avatarUrl }
       : fallbackAvatar;
-  
+
     return (
-      <SafeAreaView
-        className="flex-1 bg-white"
-        style={{ paddingTop: android ? hp(3) : 0 }}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-          enabled
-        >
+      <SafeAreaView className="flex-1 bg-white">
+        <View style={{ flex: 1 }}>
           {/* Header */}
           <View className="flex-row items-center w-full px-4 pb-2 border-b border-neutral-200 bg-white shadow-sm">
             <TouchableOpacity
@@ -345,7 +390,7 @@
             >
               <ChevronLeftIcon size={hp(3)} color="black" strokeWidth={2.2} />
             </TouchableOpacity>
-  
+
             <View className="flex-1 flex-row items-center">
               <View
                 style={{
@@ -374,13 +419,12 @@
                 </Text>
               </View>
             </View>
-  
+
             <TouchableOpacity className="p-2">
               <EllipsisHorizontalIcon size={hp(3)} color="black" />
             </TouchableOpacity>
           </View>
-  
-          {/* Chat */}
+
           <GiftedChat
             ref={chatRef}
             messages={messages}
@@ -389,15 +433,18 @@
             user={{ _id: String(currentUser?.userId ?? "me") }}
             renderInputToolbar={renderInputToolbar}
             renderBubble={renderBubble}
-            renderComposer={renderComposer}  // ✅ kiểm soát ô input
+            renderComposer={renderComposer}
             renderSend={renderSend}
+            renderActions={renderActions}
             placeholder="Viết tin nhắn..."
             alwaysShowSend
             scrollToBottom
             keyboardShouldPersistTaps="handled"
             renderAvatar={() => null}
+            minInputToolbarHeight={Platform.OS === "ios" ? 22 : 35} // nhỏ nhất ổn định
+            bottomOffset={0} // ✨ ép sát tuyệt đối
           />
-  
+
           {loading && (
             <View
               style={{
@@ -414,7 +461,7 @@
               <ActivityIndicator size="large" color="#3B82F6" />
             </View>
           )}
-        </KeyboardAvoidingView>
+        </View>
       </SafeAreaView>
     );
   }
