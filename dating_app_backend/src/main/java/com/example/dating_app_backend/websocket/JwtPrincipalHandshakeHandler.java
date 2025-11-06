@@ -8,20 +8,11 @@ import java.security.Principal;
 import java.util.Map;
 
 public class JwtPrincipalHandshakeHandler extends DefaultHandshakeHandler {
-
     @Override
-    protected Principal determineUser(ServerHttpRequest request,
-                                      WebSocketHandler wsHandler,
-                                      Map<String, Object> attributes) {
-        Object userId = attributes.get("userId");
-        if (userId instanceof Integer id) {
-            return new StompPrincipal(String.valueOf(id));
-        }
-        Object accountId = attributes.get("accountId");
-        if (accountId instanceof Integer account) {
-            return new StompPrincipal(String.valueOf(account));
-        }
-
-        return super.determineUser(request, wsHandler, attributes);
+    protected Principal determineUser(ServerHttpRequest request, WebSocketHandler wsHandler, Map<String, Object> attributes) {
+        Integer userId = (Integer) attributes.get("userId");
+        if (userId == null) return null;
+        return () -> String.valueOf(userId);
     }
 }
+

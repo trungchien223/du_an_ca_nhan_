@@ -9,6 +9,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -22,14 +23,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws")
                 .addInterceptors(jwtHandshakeInterceptor)
                 .setHandshakeHandler(jwtPrincipalHandshakeHandler())
-                .setAllowedOriginPatterns("*");
-
-        registry.addEndpoint("/ws")
-                .addInterceptors(jwtHandshakeInterceptor)
-                .setHandshakeHandler(jwtPrincipalHandshakeHandler())
+                // ❌ .setAllowedOrigins("*")  // bỏ dòng này
+                // ✅ dùng patterns để hợp lệ với allowCredentials=true
                 .setAllowedOriginPatterns("*")
-                .withSockJS();
+                .withSockJS(); // ok để nguyên; Spring vẫn nhận websocket native
     }
+
+
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -37,6 +37,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.enableSimpleBroker("/topic", "/queue");
         registry.setUserDestinationPrefix("/user");
     }
+
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registry) {
+        registry.setMessageSizeLimit(2 * 1024 * 1024); // 2MB
+        registry.setSendBufferSizeLimit(2 * 1024 * 1024);
+        registry.setSendTimeLimit(20 * 1000);
+    }
+
 
     @Bean
     public JwtPrincipalHandshakeHandler jwtPrincipalHandshakeHandler() {

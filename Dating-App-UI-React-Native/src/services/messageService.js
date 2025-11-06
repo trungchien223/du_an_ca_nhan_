@@ -15,17 +15,20 @@ export const sendMessage = async ({
   receiverId,
   content,
 }) => {
-  if (!matchId || !senderId || !receiverId || !content?.trim()) {
+  const trimmedContent = content?.trim();
+  if (!matchId || !senderId || !receiverId || !trimmedContent) {
     throw new Error("Thiếu thông tin để gửi tin nhắn.");
   }
+  const payload = {
+    matchId,
+    senderId,
+    receiverId,
+    content: trimmedContent,
+  };
   return apiFetchWithAuth("/api/messages", {
     method: "POST",
-    params: {
-      matchId,
-      senderId,
-      receiverId,
-      content,
-    },
+    data: payload,
+    params: payload,
   });
 };
 
@@ -35,8 +38,7 @@ export const markConversationAsRead = async (matchId, userId) => {
   }
   return apiFetchWithAuth(`/api/messages/${matchId}/read`, {
     method: "POST",
-    params: {
-      userId,
-    },
+    data: { userId },
+    params: { userId },
   });
 };

@@ -1,5 +1,6 @@
 import { Client } from "@stomp/stompjs";
 import { API_BASE_URL, getValidAccessToken } from "./authService";
+import SockJS from "sockjs-client";
 
 const WS_PATH = "/ws";
 
@@ -52,16 +53,13 @@ class WebSocketService {
     this.connecting = false;
     this.pendingAcks = new Map();
     this.currentToken = null;
+    this.messageQueue = []; // ✅ Thêm dòng này để tránh undefined
   }
 
   async connect(options = {}) {
     const { force = false } = options;
-    if (this.connecting) {
-      return;
-    }
-    if (!force && this.connected) {
-      return;
-    }
+    if (this.connecting) return;
+    if (!force && this.connected) return;
 
     let token;
     try {
@@ -74,17 +72,11 @@ class WebSocketService {
       return;
     }
 
-    if (!force && this.client?.active && this.currentToken === token) {
-      return;
-    }
+    if (!force && this.client?.active && this.currentToken === token) return;
 
-    if (this.client) {
-      try {
-        await this.client.deactivate();
-      } catch (error) {
-        console.warn("[WebSocket] Error during deactivate:", error);
-      }
-      this.client = null;
+    // ✅ KHÔNG deactivate trước khi tạo client mới — để reconnect nhanh hơn
+    if (this.client && this.client.active) {
+      console.warn("[WebSocket] Existing client still active, skipping deactivate");
     }
 
     this.connecting = true;
@@ -95,42 +87,56 @@ class WebSocketService {
       console.log("[WebSocket] Connecting to", brokerURL);
 
       this.client = new Client({
-        brokerURL,
-        reconnectDelay: 5000,
+        brokerURL: `${API_BASE_URL.replace(/^http/, "ws")}/ws?token=${token}`,
+        webSocketFactory: () =>
+          new SockJS(`${API_BASE_URL}/ws?token=${token}`),
+        reconnectDelay: 3000, // ✅ Giảm delay để reconnect nhanh hơn
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
         debug: (msg) => console.log("[STOMP]", msg),
+
         onConnect: () => {
-          console.log("[WebSocket] Connected");
+          console.log("[WebSocket] ✅ Connected");
           this.connected = true;
           this.connecting = false;
           emit("connection.change", true);
           this.registerSubscriptions();
+
+          // ✅ Flush queued messages
+          if (this.messageQueue.length > 0) {
+            console.log(`[WebSocket] Flushing ${this.messageQueue.length} queued messages...`);
+            this.messageQueue.forEach(({ destination, body }) => {
+              this.client.publish({ destination, body: JSON.stringify(body) });
+            });
+            this.messageQueue = [];
+          }
         },
-        onStompError: (frame) => {
-          console.warn("[WebSocket] STOMP error:", frame.headers, frame.body);
-        },
-        onWebSocketError: (event) => {
-          console.warn("[WebSocket] transport error:", event?.message ?? event);
-        },
+
         onDisconnect: () => {
-          console.warn("[WebSocket] Disconnected");
+          console.warn("[WebSocket] ⚠️ Disconnected");
           this.connected = false;
           emit("connection.change", false);
         },
+
         onWebSocketClose: (event) => {
-          console.warn("[WebSocket] Closed:", event?.code, event?.reason);
+          console.warn("[WebSocket] 🔁 Closed:", event?.code, event?.reason);
           this.connected = false;
           this.connecting = false;
           emit("connection.change", false);
-
-          // Reset current token so we will fetch a fresh one next time
           this.currentToken = null;
 
-          if (event?.code !== 1000 || !event.wasClean) {
-            // attempt reconnect on abnormal closure
-            setTimeout(() => this.connect({ force: true }), 2000);
-          }
+          // ✅ Tự động reconnect khi backend restart
+          setTimeout(() => this.connect({ force: true }), 2000);
+        },
+
+        onWebSocketError: (event) => {
+          console.warn("[WebSocket] transport error:", event?.message ?? event);
+          // ✅ Thử reconnect nhẹ khi lỗi transport
+          setTimeout(() => this.connect({ force: true }), 3000);
+        },
+
+        onStompError: (frame) => {
+          console.warn("[WebSocket] STOMP error:", frame.headers, frame.body);
         },
       });
 
@@ -140,6 +146,8 @@ class WebSocketService {
       this.connected = false;
       this.connecting = false;
       this.currentToken = null;
+      // ✅ Auto reconnect khi lỗi kích hoạt
+      setTimeout(() => this.connect({ force: true }), 5000);
     }
   }
 
@@ -195,15 +203,15 @@ class WebSocketService {
 
   publish(destination, body) {
     if (!this.client || !this.connected) {
-      console.warn("[WebSocket] publish skipped, client not ready.");
+      console.warn("[WebSocket] publish queued (client not ready).");
+      this.messageQueue.push({ destination, body });
       return false;
     }
-    this.client.publish({
-      destination,
-      body: JSON.stringify(body),
-    });
+
+    this.client.publish({ destination, body: JSON.stringify(body) });
     return true;
   }
+
 
   sendChatMessage({ matchId, receiverId, content }) {
     if (!matchId || !receiverId || !content?.trim()) {
@@ -238,6 +246,25 @@ class WebSocketService {
 
     return { clientMessageId, ack };
   }
+
+  waitUntilConnected(timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      if (this.connected) return resolve(true);
+
+      const checkInterval = setInterval(() => {
+        if (this.connected) {
+          clearInterval(checkInterval);
+          resolve(true);
+        }
+      }, 200);
+
+      setTimeout(() => {
+        clearInterval(checkInterval);
+        reject(new Error("WebSocket chưa sẵn sàng sau 5 giây."));
+      }, timeout);
+    });
+  }
+
 
   sendTyping({ matchId, receiverId, typing }) {
     if (!this.connected) {
