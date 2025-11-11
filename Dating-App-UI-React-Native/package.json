@@ -30,6 +30,7 @@
     "postcss": "^8.4.31",
     "react": "^19.1.0",
     "react-native": "^0.81.5",
+    "react-native-emoji-selector": "^0.2.0",
     "react-native-gifted-chat": "^2.8.1",
     "react-native-heroicons": "^3.2.0",
     "react-native-reanimated": "~4.1.1",
